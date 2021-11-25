@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include "rosbag2_transport/bag_rewrite.hpp"
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -26,58 +28,13 @@
 #include "rosbag2_cpp/readers/sequential_reader.hpp"
 #include "rosbag2_cpp/writer.hpp"
 #include "rosbag2_cpp/writers/sequential_writer.hpp"
-#include "rosbag2_transport/bag_rewrite.hpp"
+#include "rosbag2_transport/reader_writer_factory.hpp"
 
 #include "logging.hpp"
 #include "topic_filter.hpp"
 
 namespace
 {
-
-/// Create a Reader with the appropriate underlying implementation.
-std::unique_ptr<rosbag2_cpp::Reader> make_reader(
-  const rosbag2_storage::StorageOptions & storage_options)
-{
-  rosbag2_storage::MetadataIo metadata_io;
-  std::unique_ptr<rosbag2_cpp::reader_interfaces::BaseReaderInterface> reader_impl;
-
-  if (metadata_io.metadata_file_exists(storage_options.uri)) {
-    auto metadata = metadata_io.read_metadata(storage_options.uri);
-    if (!metadata.compression_format.empty()) {
-      reader_impl = std::make_unique<rosbag2_compression::SequentialCompressionReader>();
-    }
-  }
-  if (!reader_impl) {
-    reader_impl = std::make_unique<rosbag2_cpp::readers::SequentialReader>();
-  }
-
-  return std::make_unique<rosbag2_cpp::Reader>(std::move(reader_impl));
-}
-
-
-/// Create a Writer with the appropriate underlying implementation.
-std::unique_ptr<rosbag2_cpp::Writer> make_writer(
-  const rosbag2_transport::RecordOptions & record_options)
-{
-  std::unique_ptr<rosbag2_cpp::writer_interfaces::BaseWriterInterface> writer_impl;
-  if (!record_options.compression_format.empty()) {
-    rosbag2_compression::CompressionOptions compression_options {
-      record_options.compression_format,
-      rosbag2_compression::compression_mode_from_string(record_options.compression_mode),
-      record_options.compression_queue_size,
-      record_options.compression_threads
-    };
-    if (compression_options.compression_threads < 1) {
-      compression_options.compression_threads = std::thread::hardware_concurrency();
-    }
-    writer_impl = std::make_unique<rosbag2_compression::SequentialCompressionWriter>(
-      compression_options);
-  } else {
-    writer_impl = std::make_unique<rosbag2_cpp::writers::SequentialWriter>();
-  }
-
-  return std::make_unique<rosbag2_cpp::Writer>(std::move(writer_impl));
-}
 
 /// Find the next chronological message from all opened input bags.
 /// Updates the next_messages queue as necessary.
@@ -207,12 +164,7 @@ setup_topic_filtering(
   return filtered_outputs;
 }
 
-}  // namespace
-
-namespace rosbag2_transport
-{
-
-void bag_rewrite(
+void perform_rewrite(
   const std::vector<std::unique_ptr<rosbag2_cpp::Reader>> & input_bags,
   const std::vector<
     std::pair<std::unique_ptr<rosbag2_cpp::Writer>, rosbag2_transport::RecordOptions>
@@ -239,6 +191,10 @@ void bag_rewrite(
   }
 }
 
+}  // namespace
+
+namespace rosbag2_transport
+{
 void bag_rewrite(
   const std::vector<rosbag2_storage::StorageOptions> & input_options,
   const std::vector<
@@ -252,7 +208,7 @@ void bag_rewrite(
   > output_bags;
 
   for (const auto & storage_options : input_options) {
-    auto reader = make_reader(storage_options);
+    auto reader = ReaderWriterFactory::make_reader(storage_options);
     reader->open(storage_options);
     input_bags.push_back(std::move(reader));
   }
@@ -265,12 +221,11 @@ void bag_rewrite(
     // room in the cache, which may require some new APIs
     auto modified_storage_options = storage_options;
     modified_storage_options.max_cache_size = 0u;
-    auto writer = make_writer(record_options);
+    auto writer = ReaderWriterFactory::make_writer(record_options);
     writer->open(modified_storage_options);
     output_bags.push_back(std::make_pair(std::move(writer), record_options));
   }
 
-  bag_rewrite(input_bags, output_bags);
+  perform_rewrite(input_bags, output_bags);
 }
-
 }  // namespace rosbag2_transport

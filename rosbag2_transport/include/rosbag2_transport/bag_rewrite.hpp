@@ -32,28 +32,16 @@ namespace rosbag2_transport
 /// - compress
 /// - serialization format conversion
 ///
-/// \param input_bags - a vector of Readers for bag inputs. Must already be "open"ed
-/// \param output_bags - full "recording" configuration of the bag(s) to output.
-///   Must already be "open"ed
-///   Each output bag will be passed every message from each input bag in timestamp order,
-///   and is responsible for being configured to flter/process as needed.
-void bag_rewrite(
-  const std::vector<std::unique_ptr<rosbag2_cpp::Reader>> & input_bags,
-  const std::vector<
-    std::pair<std::unique_ptr<rosbag2_cpp::Writer>, rosbag2_transport::RecordOptions>
-  > & output_bags
-);
-
-/// See above bag_rewrite documentation
-/// Convenience signature to create and open necessary Readers and Writers, given
-/// the relevant Options structs.
+/// \param input_options - a vector of Readers for bags to read messages from
+/// \param output_bags - full "recording" configuration of the bag(s) to write messages to
+///   Each output bag will be passed messages from every input bag, on topics that pass its
+///   filtering options
 void bag_rewrite(
   const std::vector<rosbag2_storage::StorageOptions> & input_options,
   const std::vector<
     std::pair<rosbag2_storage::StorageOptions, rosbag2_transport::RecordOptions>
   > & output_options
 );
-
 }  // namespace rosbag2_transport
 
 #endif  // ROSBAG2_TRANSPORT__BAG_REWRITE_HPP_
