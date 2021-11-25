@@ -1,3 +1,6 @@
+# Patches for Exclude Options (-x or --exclude)
+There is a bug in the foxy-future branch, so this branch is my personal fix.
+
 # Foxy Improvement Backport Branch
 
 This branch contains a special-purpose version of rosbag2 that is intended to be used in a Foxy application.
